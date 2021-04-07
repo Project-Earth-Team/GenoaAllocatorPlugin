@@ -1,2 +1,2 @@
-# GenoaPlugin
-A plugin for various utils to add Minecraft Earth features to Cloudburst.
+# GenoaAllocatorPlugin
+An level allocator for use in conjunction with the normal GenoaPlugin and the Cloudburst fork.
