@@ -31,6 +31,10 @@
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
         </repository>
+        <repository>
+            <id>rtm516-maven</id>
+            <url>https://repo.rtm516.co.uk/artifactory/maven/</url>
+        </repository>
     </repositories>
 
     <dependencies>
