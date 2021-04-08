@@ -38,16 +38,21 @@
     </repositories>
 
     <dependencies>
-        <!--        <dependency>-->
-        <!--            <groupId>org.cloudburstmc</groupId>-->
-        <!--            <artifactId>cloudburst-server</artifactId>-->
-        <!--            <version>0.0.1-SNAPSHOT</version>-->
-        <!--            <scope>provided</scope>-->
-        <!--        </dependency>-->
-        <dependency>
+        <!-- <dependency>
+            <groupId>org.cloudburstmc</groupId>
+            <artifactId>cloudburst-server</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency> -->
+             <dependency>
             <groupId>com.github.Project-Earth-Team</groupId>
             <artifactId>Server</artifactId>
-            <version>235c40c2f8</version>
+            <version>d30dc24e6b</version>
+        </dependency>
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.1</version>
         </dependency>
         <dependency>
             <groupId>dev.projectearth</groupId>
@@ -81,6 +86,26 @@
                             <mainClass>dev.projectearth.genoa_allocator_plugin.GenoaAllocatorPlugin</mainClass>
                         </manifest>
                     </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.4.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <artifactSet>
+                        <includes>
+                            <include>org.java-websocket:Java-WebSocket</include>
+                        </includes>
+                    </artifactSet>
                 </configuration>
             </plugin>
         </plugins>

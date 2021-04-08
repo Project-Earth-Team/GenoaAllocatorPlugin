@@ -4,10 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.sun.net.httpserver.HttpServer;
-import dev.projectearth.genoa_allocator_plugin.utils.IpInformation;
-import dev.projectearth.genoa_allocator_plugin.utils.ServerBuildplateRequest;
-import dev.projectearth.genoa_allocator_plugin.utils.ServerInstanceInfo;
-import dev.projectearth.genoa_allocator_plugin.utils.ServerInstanceRequestInfo;
+import dev.projectearth.genoa_allocator_plugin.utils.*;
 import dev.projectearth.genoa_plugin.GenoaPlugin;
 import dev.projectearth.genoa_plugin.utils.BuildplateLoader;
 import lombok.Getter;
@@ -22,6 +19,9 @@ import org.cloudburstmc.server.utils.Identifier;
 import org.cloudburstmc.server.utils.genoa.GenoaServerCommand;
 import org.cloudburstmc.server.utils.genoa.GenoaUtils;
 import org.iq80.leveldb.util.FileUtils;
+import org.java_websocket.WebSocket;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.drafts.Draft_6455;
 import org.slf4j.Logger;
 import org.cloudburstmc.api.plugin.Plugin;
 import org.cloudburstmc.api.plugin.PluginDescription;
@@ -57,7 +57,7 @@ public class GenoaAllocatorPlugin implements PluginContainer {
     private final Map<String, UUID> playerInstanceMap = new HashMap<>();
     private final Map<UUID, UUID> instanceBuildplateMap = new HashMap<>();
 
-    private UUID serverApiKey;
+    private WebSocketClient client;
 
     @Inject
     private GenoaAllocatorPlugin(Logger logger, PluginDescription description, Path dataDirectory) {
@@ -83,9 +83,17 @@ public class GenoaAllocatorPlugin implements PluginContainer {
     public void onInitialization(ServerInitializationEvent event) {
         this.logger.info("Genoa allocator plugin loading...");
 
-        registerServer();
         try {
-            startListeningServer();
+
+            this.client = startListeningServer();
+            this.client.setConnectionLostTimeout(0);
+            this.client.connect();
+
+            while (!this.client.isOpen()) {
+            }
+
+            registerServer();
+
         } catch (Exception e) {
             this.logger.info("An error occured while starting the allocator server.");
             e.printStackTrace();
@@ -96,18 +104,16 @@ public class GenoaAllocatorPlugin implements PluginContainer {
     }
 
     private void registerServer() {
+        ServerInformation info = new ServerInformation();
+        info.setServerId(this.server.getServerUniqueId());
+        info.setIp(getOutboundIp());
+        info.setPort(this.server.getPort());
         try {
-
-        IpInformation ipInformation = new IpInformation();
-        ipInformation.setIp(getOutboundIp());
-        ipInformation.setPort(this.server.getPort());
-
-        String apiKey = GenoaUtils.SendApiCommand(GenoaServerCommand.RegisterServer, null, OBJECT_MAPPER.writeValueAsString(ipInformation));
-
-        GenoaUtils.setServerApiKey(UUID.fromString(apiKey));
-
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
+            String request = OBJECT_MAPPER.writeValueAsString(info);
+            this.client.send(request);
+        } catch (Exception e) {
+         this.logger.error("An error occured while trying to initiate the server registration.");
+         e.printStackTrace();
         }
     }
 
@@ -123,20 +129,22 @@ public class GenoaAllocatorPlugin implements PluginContainer {
         return null;
     }
 
-    private void startListeningServer() throws IOException {
-        // TODO: Add http server (private/instance/new)
-        HttpServer server = HttpServer.create(new InetSocketAddress(81), 0);
-        server.createContext("/private/instance/new", (request -> {
+    private WebSocketClient startListeningServer() {
 
-            String requestString = new BufferedReader(new InputStreamReader(request.getRequestBody())).lines().collect(Collectors.joining());
-            ServerInstanceRequestInfo instanceRequestInfo = OBJECT_MAPPER.readValue(requestString, ServerInstanceRequestInfo.class);
+        String serverAddress = "ws://" + this.server.getConfig().getSettings().getEarthApi() + "/v1.1/private/server/ws";
+        WebSocketClient wsc = new ApiClient(URI.create(serverAddress));
+
+        return wsc;
+    }
+
+    public void onBuildplateLoadRequest(String instanceString) {
+        try {
+            ServerInstanceRequestInfo instanceRequestInfo = OBJECT_MAPPER.readValue(instanceString, ServerInstanceRequestInfo.class);
             onBuildplateLoadRequest(instanceRequestInfo);
-
-            request.sendResponseHeaders(200, 0);
-            request.close();
-        }));
-        server.setExecutor(null);
-        server.start();
+        } catch (Exception e) {
+            this.logger.error("An error occured while trying to load the buildplate.");
+            e.printStackTrace();
+        }
     }
 
     private void onBuildplateLoadRequest(ServerInstanceRequestInfo instance) {
@@ -175,10 +183,10 @@ public class GenoaAllocatorPlugin implements PluginContainer {
         String request = OBJECT_MAPPER.writeValueAsString(req);
         String buildplate = GenoaUtils.SendApiCommand(GenoaServerCommand.GetBuildplate, null, request);
 
-        File buildplateFile = new File(buildplateId.toString() + ".json");
+        File buildplateFile = new File(this.server.getFilePath() + "/worlds/" + buildplateId.toString() + ".json");
         buildplateFile.createNewFile();
 
-        FileWriter fileWriter = new FileWriter(buildplateId.toString() + ".json");
+        FileWriter fileWriter = new FileWriter(this.server.getFilePath() + "/worlds/" + buildplateId.toString() + ".json");
         fileWriter.write(buildplate);
         fileWriter.close();
 
@@ -197,6 +205,8 @@ public class GenoaAllocatorPlugin implements PluginContainer {
             String buildplateId = instanceBuildplateMap.get(playerInstanceMap.get(playerId)).toString();
             Location spawnLocation = this.server.getLevel(buildplateId).getSpawnLocation();
             player.teleportImmediate(spawnLocation);
+        } else {
+            event.getPlayer().kick();
         }
     }
 
