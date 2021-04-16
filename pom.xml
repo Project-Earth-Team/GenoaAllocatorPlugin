@@ -47,7 +47,7 @@
              <dependency>
             <groupId>com.github.Project-Earth-Team</groupId>
             <artifactId>Server</artifactId>
-            <version>d30dc24e6b</version>
+            <version>016ee0c9d9</version>
         </dependency>
         <dependency>
             <groupId>org.java-websocket</groupId>

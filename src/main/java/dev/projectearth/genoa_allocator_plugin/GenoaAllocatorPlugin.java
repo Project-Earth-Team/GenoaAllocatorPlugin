@@ -118,23 +118,41 @@ public class GenoaAllocatorPlugin implements PluginContainer {
     }
 
     private String getOutboundIp() {
-        // https://stackoverflow.com/a/38342964
-        try(final DatagramSocket socket = new DatagramSocket()){
-            socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
-            String ip = socket.getLocalAddress().getHostAddress();
-            return ip;
-        } catch (UnknownHostException | SocketException e) {
+        try {
+            URL url = new URL("http://icanhazip.com");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setDoOutput(true);
+
+            StringBuilder response;
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                response = new StringBuilder();
+
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+            }
+
+            this.logger.info("OUTBOUND IP: " + response.toString());
+
+            return response.toString();
+        } catch (Exception e) {
+            this.logger.error("Error whilst getting outbound ip!");
             e.printStackTrace();
+            return null;
         }
-        return null;
     }
 
     private WebSocketClient startListeningServer() {
+        String coreAddress = this.server.getConfig().getSettings().getEarthApi() + "/v1.1/private/server/ws/";
+        String serverAddress;
 
-        String serverAddress = "ws://" + this.server.getConfig().getSettings().getEarthApi() + "/v1.1/private/server/ws";
-        WebSocketClient wsc = new ApiClient(URI.create(serverAddress));
-
-        return wsc;
+        if (CloudServer.getInstance().getConfig().getSettings().isEnableSecureApiConnections()) {
+            serverAddress = "wss://" + coreAddress;
+        } else {
+            serverAddress = "ws://" + coreAddress;
+        }
+        return new ApiClient(URI.create(serverAddress));
     }
 
     public void onBuildplateLoadRequest(String instanceString) {
@@ -174,6 +192,9 @@ public class GenoaAllocatorPlugin implements PluginContainer {
     }
 
     private void downloadBuildplate(UUID buildplateId, String playerId) {
+        File buildplateFile = new File(this.server.getFilePath() + "/worlds/" + buildplateId.toString() + ".json");
+        if (buildplateFile.exists()) return;
+
         ServerBuildplateRequest req = new ServerBuildplateRequest();
         req.setBuildplateId(buildplateId);
         req.setPlayerId(playerId);
@@ -182,8 +203,6 @@ public class GenoaAllocatorPlugin implements PluginContainer {
 
         String request = OBJECT_MAPPER.writeValueAsString(req);
         String buildplate = GenoaUtils.SendApiCommand(GenoaServerCommand.GetBuildplate, null, request);
-
-        File buildplateFile = new File(this.server.getFilePath() + "/worlds/" + buildplateId.toString() + ".json");
         buildplateFile.createNewFile();
 
         FileWriter fileWriter = new FileWriter(this.server.getFilePath() + "/worlds/" + buildplateId.toString() + ".json");
@@ -223,7 +242,7 @@ public class GenoaAllocatorPlugin implements PluginContainer {
 
             this.server.unloadLevel(this.server.getLevel(buildplateId.toString()));
 
-            deleteBuildplate(buildplateId);
+            //deleteBuildplate(buildplateId);
             // TODO: Add request to edit buildplate on core api so that the model gets updated
         }
     }
